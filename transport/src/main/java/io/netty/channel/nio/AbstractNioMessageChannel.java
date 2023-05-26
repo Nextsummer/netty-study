@@ -63,6 +63,9 @@ public abstract class AbstractNioMessageChannel extends AbstractNioChannel {
 
         private final List<Object> readBuf = new ArrayList<Object>();
 
+        /**
+         * 创建连接
+         */
         @Override
         public void read() {
             assert eventLoop().inEventLoop();
@@ -85,7 +88,9 @@ public abstract class AbstractNioMessageChannel extends AbstractNioChannel {
                             break;
                         }
 
+                        // 记录一下创建的次数
                         allocHandle.incMessagesRead(localRead);
+                        // 判断一下是否要继续读
                     } while (continueReading(allocHandle));
                 } catch (Throwable t) {
                     exception = t;
@@ -94,6 +99,7 @@ public abstract class AbstractNioMessageChannel extends AbstractNioChannel {
                 int size = readBuf.size();
                 for (int i = 0; i < size; i ++) {
                     readPending = false;
+                    // 创建连接的结果通过 fireChannelRead 传播出去了
                     pipeline.fireChannelRead(readBuf.get(i));
                 }
                 readBuf.clear();

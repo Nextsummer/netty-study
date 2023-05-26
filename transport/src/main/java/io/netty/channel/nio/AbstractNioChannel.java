@@ -87,7 +87,7 @@ public abstract class AbstractNioChannel extends AbstractChannel {
                 ch.close();
             } catch (IOException e2) {
                 logger.warn(
-                            "Failed to close a partially initialized socket.", e2);
+                        "Failed to close a partially initialized socket.", e2);
             }
 
             throw new ChannelException("Failed to enter non-blocking mode.", e);
@@ -260,7 +260,7 @@ public abstract class AbstractNioChannel extends AbstractChannel {
                                 ChannelPromise connectPromise = AbstractNioChannel.this.connectPromise;
                                 if (connectPromise != null && !connectPromise.isDone()
                                         && connectPromise.tryFailure(new ConnectTimeoutException(
-                                                "connection timed out: " + remoteAddress))) {
+                                        "connection timed out: " + remoteAddress))) {
                                     close(voidPromise());
                                 }
                             }
@@ -372,22 +372,31 @@ public abstract class AbstractNioChannel extends AbstractChannel {
         return loop instanceof NioEventLoop;
     }
 
+    /**
+     * 用于将当前 Channel 注册到 Selector 上，以便可以开始进行 I/O 操作。
+     * @throws Exception
+     */
     @Override
     protected void doRegister() throws Exception {
         boolean selected = false;
         for (;;) {
             try {
+                // 将 Channel 注册到 Selector 上，并返回一个新创建的 SelectionKey 对象
                 selectionKey = javaChannel().register(eventLoop().unwrappedSelector(), 0, this);
+                logger.info("initial register: 0");
                 return;
             } catch (CancelledKeyException e) {
                 if (!selected) {
                     // Force the Selector to select now as the "canceled" SelectionKey may still be
                     // cached and not removed because no Select.select(..) operation was called yet.
+                    // 如果没有成功注册，说明 Selector 正在进行 select()，则等待一段时间后重试
+                    // 避免在 select() 过程中取消 SelectionKey 导致的异常
                     eventLoop().selectNow();
                     selected = true;
                 } else {
                     // We forced a select operation on the selector before but the SelectionKey is still cached
                     // for whatever reason. JDK bug ?
+                    // 如果尝试了两次都不能成功注册，则抛出异常
                     throw e;
                 }
             }
@@ -399,18 +408,28 @@ public abstract class AbstractNioChannel extends AbstractChannel {
         eventLoop().cancel(selectionKey());
     }
 
+    /**
+     * 当 Channel 执行 read() 或者 ChannelHandlerContext 执行 read() 方法时，会触发该方法
+     * @throws Exception
+     */
     @Override
     protected void doBeginRead() throws Exception {
         // Channel.read() or ChannelHandlerContext.read() was called
+        // 获取当前 Channel 关联的 SelectionKey
         final SelectionKey selectionKey = this.selectionKey;
+        // 如果 SelectionKey 已经失效，则直接返回
         if (!selectionKey.isValid()) {
             return;
         }
 
+        // 设置读操作正在进行中的标记
         readPending = true;
 
+        // 检查 SelectionKey 是否已经注册了读事件
         final int interestOps = selectionKey.interestOps();
+        // 假设之前没有监听interestOps，则监听interestOps
         if ((interestOps & readInterestOp) == 0) {
+            logger.info("interestOps ops: " + readInterestOp);
             selectionKey.interestOps(interestOps | readInterestOp);
         }
     }

@@ -253,6 +253,7 @@ public class ResourceLeakDetector<T> {
         }
 
         if (level.ordinal() < Level.PARANOID.ordinal()) {
+            // 不是每次都tracking
             if ((PlatformDependent.threadLocalRandom().nextInt(samplingInterval)) == 0) {
                 reportLeak();
                 return new DefaultResourceLeak(obj, refQueue, allLeaks);
@@ -296,6 +297,7 @@ public class ResourceLeakDetector<T> {
                 break;
             }
 
+            // 判断有没有泄漏的关键
             if (!ref.dispose()) {
                 continue;
             }
@@ -318,7 +320,7 @@ public class ResourceLeakDetector<T> {
     protected void reportTracedLeak(String resourceType, String records) {
         logger.error(
                 "LEAK: {}.release() was not called before it's garbage-collected. " +
-                "See https://netty.io/wiki/reference-counted-objects.html for more information.{}",
+                        "See https://netty.io/wiki/reference-counted-objects.html for more information.{}",
                 resourceType, records);
     }
 
@@ -328,10 +330,10 @@ public class ResourceLeakDetector<T> {
      */
     protected void reportUntracedLeak(String resourceType) {
         logger.error("LEAK: {}.release() was not called before it's garbage-collected. " +
-                "Enable advanced leak reporting to find out where the leak occurred. " +
-                "To enable advanced leak reporting, " +
-                "specify the JVM option '-D{}={}' or call {}.setLevel() " +
-                "See https://netty.io/wiki/reference-counted-objects.html for more information.",
+                        "Enable advanced leak reporting to find out where the leak occurred. " +
+                        "To enable advanced leak reporting, " +
+                        "specify the JVM option '-D{}={}' or call {}.setLevel() " +
+                        "See https://netty.io/wiki/reference-counted-objects.html for more information.",
                 resourceType, PROP_LEVEL, Level.ADVANCED.name().toLowerCase(), simpleClassName(this));
     }
 
@@ -479,7 +481,7 @@ public class ResourceLeakDetector<T> {
             }
         }
 
-         /**
+        /**
          * Ensures that the object referenced by the given reference remains
          * <a href="package-summary.html#reachability"><em>strongly reachable</em></a>,
          * regardless of any prior actions of the program that might otherwise cause
@@ -546,13 +548,13 @@ public class ResourceLeakDetector<T> {
 
             if (dropped > 0) {
                 buf.append(": ")
-                   .append(dropped)
-                   .append(" leak records were discarded because the leak record count is targeted to ")
-                   .append(TARGET_RECORDS)
-                   .append(". Use system property ")
-                   .append(PROP_TARGET_RECORDS)
-                   .append(" to increase the limit.")
-                   .append(NEWLINE);
+                        .append(dropped)
+                        .append(" leak records were discarded because the leak record count is targeted to ")
+                        .append(TARGET_RECORDS)
+                        .append(". Use system property ")
+                        .append(PROP_TARGET_RECORDS)
+                        .append(" to increase the limit.")
+                        .append(NEWLINE);
             }
 
             buf.setLength(buf.length() - NEWLINE.length());
@@ -614,9 +616,9 @@ public class ResourceLeakDetector<T> {
         }
 
         TraceRecord(TraceRecord next) {
-           hintString = null;
-           this.next = next;
-           this.pos = next.pos + 1;
+            hintString = null;
+            this.next = next;
+            this.pos = next.pos + 1;
         }
 
         // Used to terminate the stack

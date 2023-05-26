@@ -44,7 +44,7 @@ public abstract class AbstractNioByteChannel extends AbstractNioChannel {
     private static final ChannelMetadata METADATA = new ChannelMetadata(false, 16);
     private static final String EXPECTED_TYPES =
             " (expected: " + StringUtil.simpleClassName(ByteBuf.class) + ", " +
-            StringUtil.simpleClassName(FileRegion.class) + ')';
+                    StringUtil.simpleClassName(FileRegion.class) + ')';
 
     private final Runnable flushTask = new Runnable() {
         @Override
@@ -97,7 +97,9 @@ public abstract class AbstractNioByteChannel extends AbstractNioChannel {
     protected class NioByteUnsafe extends AbstractNioUnsafe {
 
         private void closeOnRead(ChannelPipeline pipeline) {
+            // 判断input关闭了没有
             if (!isInputShutdown0()) {
+                // 判断是否支持半关？如果是，关闭读，触发事件
                 if (isAllowHalfClosure(config())) {
                     shutdownInput();
                     pipeline.fireUserEventTriggered(ChannelInputShutdownEvent.INSTANCE);
@@ -111,7 +113,7 @@ public abstract class AbstractNioByteChannel extends AbstractNioChannel {
         }
 
         private void handleReadException(ChannelPipeline pipeline, ByteBuf byteBuf, Throwable cause, boolean close,
-                RecvByteBufAllocator.Handle allocHandle) {
+                                         RecvByteBufAllocator.Handle allocHandle) {
             if (byteBuf != null) {
                 if (byteBuf.isReadable()) {
                     readPending = false;
@@ -131,6 +133,9 @@ public abstract class AbstractNioByteChannel extends AbstractNioChannel {
             }
         }
 
+        /**
+         * 读数据
+         */
         @Override
         public final void read() {
             final ChannelConfig config = config();
@@ -139,7 +144,9 @@ public abstract class AbstractNioByteChannel extends AbstractNioChannel {
                 return;
             }
             final ChannelPipeline pipeline = pipeline();
+            // byteBuf分配器
             final ByteBufAllocator allocator = config.getAllocator();
+            //io.netty.channel.DefaultChannelConfig中设置RecvByteBufAllocator, ，默认 AdaptiveRecvByteBufAllocator
             final RecvByteBufAllocator.Handle allocHandle = recvBufAllocHandle();
             allocHandle.reset(config);
 
@@ -147,7 +154,9 @@ public abstract class AbstractNioByteChannel extends AbstractNioChannel {
             boolean close = false;
             try {
                 do {
+                    // 尽可能分配合适的大小: guess
                     byteBuf = allocHandle.allocate(allocator);
+                    // 读并且记录读了多少，如果读满了，下次continue的话就直接扩容
                     allocHandle.lastBytesRead(doReadBytes(byteBuf));
                     if (allocHandle.lastBytesRead() <= 0) {
                         // nothing was read. release the buffer.
@@ -161,13 +170,18 @@ public abstract class AbstractNioByteChannel extends AbstractNioChannel {
                         break;
                     }
 
+                    // 记录一下读了几次
                     allocHandle.incMessagesRead(1);
                     readPending = false;
+                    // pipeline上执行，业务逻辑的处理位置
                     pipeline.fireChannelRead(byteBuf);
                     byteBuf = null;
+                    //   判断接受 byte buffer 是否满载而归：是，尝试继续读取直到没有数据或满 16 次；否，结束本轮读取，等待下次OP_READ 事件
                 } while (allocHandle.continueReading());
 
+                // 记录这次读事件总共读了多少数据，计算下次分配大小
                 allocHandle.readComplete();
+                // 相当于完成本次读事件的处理
                 pipeline.fireChannelReadComplete();
 
                 if (close) {
@@ -286,6 +300,13 @@ public abstract class AbstractNioByteChannel extends AbstractNioChannel {
                 "unsupported message type: " + StringUtil.simpleClassName(msg) + EXPECTED_TYPES);
     }
 
+    /**
+     * 用来处理写入操作不完整的方法
+     *
+     * 在进行写入操作时，可能会出现写入操作只写入了部分数据的情况。这时，就需要使用这个方法来进行处理，将剩余的数据保存下来，
+     * 等待下一次写入操作时进行补充写入。这样可以保证数据的完整性，同时也提高了写入操作的效率。
+     * @param setOpWrite
+     */
     protected final void incompleteWrite(boolean setOpWrite) {
         // Did not write completely.
         if (setOpWrite) {

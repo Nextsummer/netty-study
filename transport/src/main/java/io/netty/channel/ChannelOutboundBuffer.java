@@ -117,6 +117,7 @@ public final class ChannelOutboundBuffer {
             flushedEntry = null;
         } else {
             Entry tail = tailEntry;
+            // 追加到队尾
             tail.next = entry;
         }
         tailEntry = entry;
@@ -138,6 +139,7 @@ public final class ChannelOutboundBuffer {
         // where added in the meantime.
         //
         // See https://github.com/netty/netty/issues/2577
+        // 将 unflushedEntry 数据转换到 flushedEntry 里面
         Entry entry = unflushedEntry;
         if (entry != null) {
             if (flushedEntry == null) {
@@ -173,6 +175,7 @@ public final class ChannelOutboundBuffer {
         }
 
         long newWriteBufferSize = TOTAL_PENDING_SIZE_UPDATER.addAndGet(this, size);
+        // 判断待发送的数据size是否高于高水位线
         if (newWriteBufferSize > channel.config().getWriteBufferHighWaterMark()) {
             setUnwritable(invokeLater);
         }
@@ -351,6 +354,7 @@ public final class ChannelOutboundBuffer {
                 }
                 remove();
             } else { // readableBytes > writtenBytes
+                // 尚未写完整
                 if (writtenBytes != 0) {
                     buf.readerIndex(readerIndex + (int) writtenBytes);
                     progress(writtenBytes);

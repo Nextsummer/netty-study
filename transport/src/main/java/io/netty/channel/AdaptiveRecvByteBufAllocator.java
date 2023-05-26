@@ -123,7 +123,14 @@ public class AdaptiveRecvByteBufAllocator extends DefaultMaxMessagesRecvByteBufA
             return nextReceiveBufferSize;
         }
 
+        /**
+         * 接收数据buffer的容量会尽可能的足够大以接收数据
+         * 也尽可能的小以不会浪费它的空间
+         * @param actualReadBytes
+         */
         private void record(int actualReadBytes) {
+            // 尝试是否可以减小分配的空间仍然能满足需求：
+            // 尝试方法：当前实际读取的size是否小于或等于打算缩小的尺寸
             if (actualReadBytes <= SIZE_TABLE[max(0, index - INDEX_DECREMENT)]) {
                 if (decreaseNow) {
                     index = max(index - INDEX_DECREMENT, minIndex);

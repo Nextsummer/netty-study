@@ -63,10 +63,10 @@ public abstract class MultithreadEventExecutorGroup extends AbstractEventExecuto
     /**
      * Create a new instance.
      *
-     * @param nThreads          the number of threads that will be used by this instance.
-     * @param executor          the Executor to use, or {@code null} if the default should be used.
-     * @param chooserFactory    the {@link EventExecutorChooserFactory} to use.
-     * @param args              arguments which will passed to each {@link #newChild(Executor, Object...)} call
+     * @param nThreads          the number of threads that will be used by this instance. 要创建在组中的EventExecutor实例的数量。
+     * @param executor          the Executor to use, or {@code null} if the default should be used. 用于执行提交给EventExecutor实例的任务的Executor。可以为null，此时将使用默认的Executor。
+     * @param chooserFactory    the {@link EventExecutorChooserFactory} to use. 用于创建EventExecutorChooser实例的EventExecutorChooserFactory。EventExecutorChooser用于选择要用于执行给定任务的EventExecutor实例。
+     * @param args              arguments which will passed to each {@link #newChild(Executor, Object...)} call  在创建EventExecutor实例期间可以传递的可选参数。
      */
     protected MultithreadEventExecutorGroup(int nThreads, Executor executor,
                                             EventExecutorChooserFactory chooserFactory, Object... args) {
@@ -87,11 +87,12 @@ public abstract class MultithreadEventExecutorGroup extends AbstractEventExecuto
                 // TODO: Think about if this is a good exception type
                 throw new IllegalStateException("failed to create a child event loop", e);
             } finally {
+                // 如果创建EventExecutor失败，则关闭已经创建的EventExecutor
                 if (!success) {
                     for (int j = 0; j < i; j ++) {
                         children[j].shutdownGracefully();
                     }
-
+                    // 等待已经创建的EventExecutor终止
                     for (int j = 0; j < i; j ++) {
                         EventExecutor e = children[j];
                         try {
@@ -108,6 +109,7 @@ public abstract class MultithreadEventExecutorGroup extends AbstractEventExecuto
             }
         }
 
+        // 创建EventExecutorChooser
         chooser = chooserFactory.newChooser(children);
 
         final FutureListener<Object> terminationListener = new FutureListener<Object>() {
@@ -123,6 +125,7 @@ public abstract class MultithreadEventExecutorGroup extends AbstractEventExecuto
             e.terminationFuture().addListener(terminationListener);
         }
 
+        // 将children转换为只读集合
         Set<EventExecutor> childrenSet = new LinkedHashSet<EventExecutor>(children.length);
         Collections.addAll(childrenSet, children);
         readonlyChildren = Collections.unmodifiableSet(childrenSet);

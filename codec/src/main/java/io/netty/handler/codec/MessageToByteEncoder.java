@@ -135,7 +135,8 @@ public abstract class MessageToByteEncoder<I> extends ChannelOutboundHandlerAdap
      * Sub-classes may override this method to return {@link ByteBuf} with a perfect matching {@code initialCapacity}.
      */
     protected ByteBuf allocateBuffer(ChannelHandlerContext ctx, @SuppressWarnings("unused") I msg,
-                               boolean preferDirect) throws Exception {
+                                     boolean preferDirect) throws Exception {
+        // 分配一块堆内或堆外内存
         if (preferDirect) {
             return ctx.alloc().ioBuffer();
         } else {

@@ -303,15 +303,15 @@ abstract class AbstractChannelHandlerContext implements ChannelHandlerContext, R
             } catch (Throwable error) {
                 if (logger.isDebugEnabled()) {
                     logger.debug(
-                        "An exception {}" +
-                        "was thrown by a user handler's exceptionCaught() " +
-                        "method while handling the following exception:",
-                        ThrowableUtil.stackTraceToString(error), cause);
+                            "An exception {}" +
+                                    "was thrown by a user handler's exceptionCaught() " +
+                                    "method while handling the following exception:",
+                            ThrowableUtil.stackTraceToString(error), cause);
                 } else if (logger.isWarnEnabled()) {
                     logger.warn(
-                        "An exception '{}' [enable DEBUG level for full stacktrace] " +
-                        "was thrown by a user handler's exceptionCaught() " +
-                        "method while handling the following exception:", error, cause);
+                            "An exception '{}' [enable DEBUG level for full stacktrace] " +
+                                    "was thrown by a user handler's exceptionCaught() " +
+                                    "method while handling the following exception:", error, cause);
                 }
             }
         } else {
@@ -485,11 +485,17 @@ abstract class AbstractChannelHandlerContext implements ChannelHandlerContext, R
             return promise;
         }
 
+        // 查找下一个Outbound类型的上下文
         final AbstractChannelHandlerContext next = findContextOutbound(MASK_BIND);
+
+        // 获取下一个上下文关联的executor
         EventExecutor executor = next.executor();
+
+        // 判断是否在eventLoop线程中执行
         if (executor.inEventLoop()) {
             next.invokeBind(localAddress, promise);
         } else {
+            // 如果不在eventLoop线程中则提交到eventLoop执行
             safeExecute(executor, new Runnable() {
                 @Override
                 public void run() {
@@ -501,13 +507,17 @@ abstract class AbstractChannelHandlerContext implements ChannelHandlerContext, R
     }
 
     private void invokeBind(SocketAddress localAddress, ChannelPromise promise) {
+        // 判断当前上下文是否可以调用ChannelOutboundHandler的bind方法
         if (invokeHandler()) {
             try {
+                // 如果可以，则调用下一个ChannelHandler的bind方法执行绑定操作
                 ((ChannelOutboundHandler) handler()).bind(this, localAddress, promise);
             } catch (Throwable t) {
+                // 如果出现异常，通知下一个ChannelHandler处理异常
                 notifyOutboundHandlerException(t, promise);
             }
         } else {
+            // 如果当前上下文无法调用ChannelOutboundHandler的bind方法，则调用自身的bind方法执行绑定操作
             bind(localAddress, promise);
         }
     }
@@ -722,6 +732,7 @@ abstract class AbstractChannelHandlerContext implements ChannelHandlerContext, R
 
     @Override
     public ChannelHandlerContext flush() {
+        // 会找下一级的handler
         final AbstractChannelHandlerContext next = findContextOutbound(MASK_FLUSH);
         EventExecutor executor = next.executor();
         if (executor.inEventLoop()) {
@@ -771,7 +782,9 @@ abstract class AbstractChannelHandlerContext implements ChannelHandlerContext, R
     private void write(Object msg, boolean flush, ChannelPromise promise) {
         ObjectUtil.checkNotNull(msg, "msg");
         try {
+            // 检查 promise 是否已经被取消或者已经完成
             if (isNotValidPromise(promise, true)) {
+                // 如果 promise 已经被取消或者已经完成，则释放 msg，并直接返回
                 ReferenceCountUtil.release(msg);
                 // cancelled
                 return;
@@ -781,23 +794,31 @@ abstract class AbstractChannelHandlerContext implements ChannelHandlerContext, R
             throw e;
         }
 
+        // 找到下一个 context，并将 msg 标记为已经 touch 过
         final AbstractChannelHandlerContext next = findContextOutbound(flush ?
                 (MASK_WRITE | MASK_FLUSH) : MASK_WRITE);
+        // 引用计数用的，用来检测内存泄漏
         final Object m = pipeline.touch(msg, next);
+        // 获取下一个 context 的执行器
         EventExecutor executor = next.executor();
         if (executor.inEventLoop()) {
+            // 如果当前线程就是下一个 context 所在的线程
             if (flush) {
+                // 如果需要 flush，则调用下一个 context 的 invokeWriteAndFlush() 方法
                 next.invokeWriteAndFlush(m, promise);
             } else {
+                // 否则，调用下一个 context 的 invokeWrite() 方法
                 next.invokeWrite(m, promise);
             }
         } else {
+            // 如果当前线程不是下一个 context 所在的线程，则创建一个 WriteTask 对象，并提交到执行器中执行
             final WriteTask task = WriteTask.newInstance(next, m, promise, flush);
             if (!safeExecute(executor, task, promise, m, !flush)) {
                 // We failed to submit the WriteTask. We need to cancel it so we decrement the pending bytes
                 // and put it back in the Recycler for re-use later.
                 //
                 // See https://github.com/netty/netty/issues/8343.
+                // 如果提交任务失败，则取消任务，并将任务放回到 Recycler 中以便重用
                 task.cancel();
             }
         }
@@ -981,7 +1002,7 @@ abstract class AbstractChannelHandlerContext implements ChannelHandlerContext, R
     }
 
     private static boolean safeExecute(EventExecutor executor, Runnable runnable,
-            ChannelPromise promise, Object msg, boolean lazy) {
+                                       ChannelPromise promise, Object msg, boolean lazy) {
         try {
             if (lazy && executor instanceof AbstractEventExecutor) {
                 ((AbstractEventExecutor) executor).lazyExecute(runnable);
@@ -1020,7 +1041,7 @@ abstract class AbstractChannelHandlerContext implements ChannelHandlerContext, R
         });
 
         static WriteTask newInstance(AbstractChannelHandlerContext ctx,
-                Object msg, ChannelPromise promise, boolean flush) {
+                                     Object msg, ChannelPromise promise, boolean flush) {
             WriteTask task = RECYCLER.get();
             init(task, ctx, msg, promise, flush);
             return task;

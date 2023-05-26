@@ -44,7 +44,7 @@ import java.util.Map;
  * NIO selector based implementation to accept new connections.
  */
 public class NioServerSocketChannel extends AbstractNioMessageChannel
-                             implements io.netty.channel.socket.ServerSocketChannel {
+        implements io.netty.channel.socket.ServerSocketChannel {
 
     private static final ChannelMetadata METADATA = new ChannelMetadata(false, 16);
     private static final SelectorProvider DEFAULT_SELECTOR_PROVIDER = SelectorProvider.provider();
@@ -130,6 +130,8 @@ public class NioServerSocketChannel extends AbstractNioMessageChannel
     @SuppressJava6Requirement(reason = "Usage guarded by java version check")
     @Override
     protected void doBind(SocketAddress localAddress) throws Exception {
+        // 从功能上来讲，JDK6 和 JDK7 提供的 bind() 方法在绑定本地地址时并没有太大的区别，只是参数不同。
+        // 但是，在 JDK8 中，bind() 方法增加了一个参数用于处理连接建立事件，这就使得使用 JDK8 的 bind() 方法可以更方便地进行事件处理。
         if (PlatformDependent.javaVersion() >= 7) {
             javaChannel().bind(localAddress, config.getBacklog());
         } else {
@@ -144,11 +146,13 @@ public class NioServerSocketChannel extends AbstractNioMessageChannel
 
     @Override
     protected int doReadMessages(List<Object> buf) throws Exception {
+        // 接收新连接创建SocketChannel
         SocketChannel ch = SocketUtils.accept(javaChannel());
 
         try {
             if (ch != null) {
                 buf.add(new NioSocketChannel(this, ch));
+                // 返回1，代表仅仅创建一个连接
                 return 1;
             }
         } catch (Throwable t) {

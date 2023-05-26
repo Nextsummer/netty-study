@@ -193,7 +193,7 @@ public class TrafficCounter {
             monitorActive = true;
             monitor = new TrafficMonitoringTask();
             scheduledFuture =
-                executor.scheduleAtFixedRate(monitor, 0, localCheckInterval, TimeUnit.MILLISECONDS);
+                    executor.scheduleAtFixedRate(monitor, 0, localCheckInterval, TimeUnit.MILLISECONDS);
         }
     }
 
@@ -279,6 +279,8 @@ public class TrafficCounter {
             String name, long checkInterval) {
         this.name = checkNotNull(name, "name");
         this.trafficShapingHandler = checkNotNullWithIAE(trafficShapingHandler, "trafficShapingHandler");
+
+        // 执行Traffic Counter的实际操作者
         this.executor = executor;
 
         init(checkInterval);

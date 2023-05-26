@@ -1130,6 +1130,7 @@ public abstract class AbstractByteBuf extends ByteBuf {
     public int writeBytes(ScatteringByteChannel in, int length) throws IOException {
         ensureWritable(length);
         int writtenBytes = setBytes(writerIndex, in, length);
+        // -1 代表 EOF，正常关闭，IO Exception代表读数据时被关闭
         if (writtenBytes > 0) {
             writerIndex += writtenBytes;
         }
@@ -1359,10 +1360,10 @@ public abstract class AbstractByteBuf extends ByteBuf {
         }
 
         StringBuilder buf = new StringBuilder()
-            .append(StringUtil.simpleClassName(this))
-            .append("(ridx: ").append(readerIndex)
-            .append(", widx: ").append(writerIndex)
-            .append(", cap: ").append(capacity());
+                .append(StringUtil.simpleClassName(this))
+                .append("(ridx: ").append(readerIndex)
+                .append(", widx: ").append(writerIndex)
+                .append(", cap: ").append(capacity());
         if (maxCapacity != Integer.MAX_VALUE) {
             buf.append('/').append(maxCapacity);
         }
@@ -1385,7 +1386,7 @@ public abstract class AbstractByteBuf extends ByteBuf {
     }
 
     private static void checkRangeBounds(final String indexName, final int index,
-            final int fieldLength, final int capacity) {
+                                         final int fieldLength, final int capacity) {
         if (isOutOfBounds(index, fieldLength, capacity)) {
             throw new IndexOutOfBoundsException(String.format(
                     "%s: %d, length: %d (expected: range(0, %d))", indexName, index, fieldLength, capacity));

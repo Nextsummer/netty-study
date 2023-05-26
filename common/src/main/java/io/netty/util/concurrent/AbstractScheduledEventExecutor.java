@@ -38,9 +38,9 @@ public abstract class AbstractScheduledEventExecutor extends AbstractEventExecut
                 }
             };
 
-   static final Runnable WAKEUP_TASK = new Runnable() {
-       @Override
-       public void run() { } // Do nothing
+    static final Runnable WAKEUP_TASK = new Runnable() {
+        @Override
+        public void run() { } // Do nothing
     };
 
     PriorityQueue<ScheduledFutureTask<?>> scheduledTaskQueue;
@@ -98,6 +98,7 @@ public abstract class AbstractScheduledEventExecutor extends AbstractEventExecut
     protected void cancelScheduledTasks() {
         assert inEventLoop();
         PriorityQueue<ScheduledFutureTask<?>> scheduledTaskQueue = this.scheduledTaskQueue;
+        // 如果 scheduledTaskQueue 对象为空或者队列为空，直接返回
         if (isNullOrEmpty(scheduledTaskQueue)) {
             return;
         }
@@ -106,9 +107,11 @@ public abstract class AbstractScheduledEventExecutor extends AbstractEventExecut
                 scheduledTaskQueue.toArray(new ScheduledFutureTask<?>[0]);
 
         for (ScheduledFutureTask<?> task: scheduledTasks) {
+            // 取消任务，不删除任务
             task.cancelWithoutRemove(false);
         }
 
+        // 清空队列，并忽略索引
         scheduledTaskQueue.clearIgnoringIndexes();
     }
 

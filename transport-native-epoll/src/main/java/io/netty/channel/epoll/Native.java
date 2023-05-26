@@ -79,6 +79,7 @@ public final class Native {
         try {
             // First, try calling a side-effect free JNI method to see if the library was already
             // loaded by the application.
+            // 调用一个轻量级操作测试下是否加载过了，加载过了就用重复加载了
             offsetofEpollData();
         } catch (UnsatisfiedLinkError ignore) {
             // The library was not previously loaded, load it now.
@@ -174,7 +175,7 @@ public final class Native {
             timeoutNs = 0;
         }
         int ready = epollWait0(epollFd.intValue(), events.memoryAddress(), events.length(), timerFd.intValue(),
-                               timeoutSec, timeoutNs);
+                timeoutSec, timeoutNs);
         if (ready < 0) {
             throw newIOException("epoll_wait", ready);
         }
@@ -255,7 +256,7 @@ public final class Native {
     }
 
     static int sendmmsg(int fd, boolean ipv6, NativeDatagramPacketArray.NativeDatagramPacket[] msgs,
-                               int offset, int len) throws IOException {
+                        int offset, int len) throws IOException {
         int res = sendmmsg0(fd, ipv6, msgs, offset, len);
         if (res >= 0) {
             return res;

@@ -57,11 +57,11 @@ public abstract class AbstractTrafficShapingHandler extends ChannelDuplexHandler
      */
     public static final long DEFAULT_CHECK_INTERVAL = 1000;
 
-   /**
-    * Default max delay in case of traffic shaping
-    * (during which no communication will occur).
-    * Shall be less than TIMEOUT. Here half of "standard" 30s
-    */
+    /**
+     * Default max delay in case of traffic shaping
+     * (during which no communication will occur).
+     * Shall be less than TIMEOUT. Here half of "standard" 30s
+     */
     public static final long DEFAULT_MAX_TIME = 15000;
 
     /**
@@ -234,7 +234,7 @@ public abstract class AbstractTrafficShapingHandler extends ChannelDuplexHandler
      * @param newCheckInterval The new check interval (in milliseconds)
      */
     public void configure(long newWriteLimit, long newReadLimit,
-            long newCheckInterval) {
+                          long newCheckInterval) {
         configure(newWriteLimit, newReadLimit);
         configure(newCheckInterval);
     }
@@ -468,8 +468,10 @@ public abstract class AbstractTrafficShapingHandler extends ChannelDuplexHandler
 
     @Override
     public void channelRead(final ChannelHandlerContext ctx, final Object msg) throws Exception {
+        // 如果TS的handler放错了位置，接收的不是byte buffer之类，则直接跳过了
         long size = calculateSize(msg);
         long now = TrafficCounter.milliSecondFromNano();
+        // 当数据不是bytebuffer时，size计算出时-1，所以不会走到流量整形里面，所有handler的位置很重要
         if (size > 0) {
             // compute the number of ms to wait before reopening the channel
             long wait = trafficCounter.readTimeToWait(size, readLimit, maxTime, now);
@@ -484,6 +486,7 @@ public abstract class AbstractTrafficShapingHandler extends ChannelDuplexHandler
                             + isHandlerActive(ctx));
                 }
                 if (config.isAutoRead() && isHandlerActive(ctx)) {
+                    // 设置autoread标记，并且溢出“读”事件
                     config.setAutoRead(false);
                     channel.attr(READ_SUSPENDED).set(true);
                     // Create a Runnable to reactive the read if needed. If one was create before it will just be
@@ -494,6 +497,8 @@ public abstract class AbstractTrafficShapingHandler extends ChannelDuplexHandler
                         reopenTask = new ReopenReadTimerTask(ctx);
                         attr.set(reopenTask);
                     }
+
+                    // 过wait时间后，重新打开“读”事件
                     ctx.executor().schedule(reopenTask, wait, TimeUnit.MILLISECONDS);
                     if (logger.isDebugEnabled()) {
                         logger.debug("Suspend final status => " + config.isAutoRead() + ':'
@@ -503,6 +508,7 @@ public abstract class AbstractTrafficShapingHandler extends ChannelDuplexHandler
             }
         }
         informReadOperation(ctx, now);
+        // 把数据放过
         ctx.fireChannelRead(msg);
     }
 
@@ -566,12 +572,13 @@ public abstract class AbstractTrafficShapingHandler extends ChannelDuplexHandler
             }
         }
         // to maintain order of write
+        // 注意这个地方delay是0，表示不等待
         submitWrite(ctx, msg, size, 0, now, promise);
     }
 
     @Deprecated
     protected void submitWrite(final ChannelHandlerContext ctx, final Object msg,
-            final long delay, final ChannelPromise promise) {
+                               final long delay, final ChannelPromise promise) {
         submitWrite(ctx, msg, calculateSize(msg),
                 delay, TrafficCounter.milliSecondFromNano(), promise);
     }
@@ -599,6 +606,8 @@ public abstract class AbstractTrafficShapingHandler extends ChannelDuplexHandler
      * @param queueSize the current queueSize
      */
     void checkWriteSuspend(ChannelHandlerContext ctx, long delay, long queueSize) {
+        // 可能会OOM了，或者需要“等待”的时间太长了，就不建议再写了
+        // 类似景点，发现排队时间过长，或者人满为患了，这个时候出个公告，不建议大家再进来了
         if (queueSize > maxWriteSize || delay > maxWriteDelay) {
             setUserDefinedWritability(ctx, false);
         }
@@ -621,12 +630,12 @@ public abstract class AbstractTrafficShapingHandler extends ChannelDuplexHandler
     @Override
     public String toString() {
         StringBuilder builder = new StringBuilder(290)
-            .append("TrafficShaping with Write Limit: ").append(writeLimit)
-            .append(" Read Limit: ").append(readLimit)
-            .append(" CheckInterval: ").append(checkInterval)
-            .append(" maxDelay: ").append(maxWriteDelay)
-            .append(" maxSize: ").append(maxWriteSize)
-            .append(" and Counter: ");
+                .append("TrafficShaping with Write Limit: ").append(writeLimit)
+                .append(" Read Limit: ").append(readLimit)
+                .append(" CheckInterval: ").append(checkInterval)
+                .append(" maxDelay: ").append(maxWriteDelay)
+                .append(" maxSize: ").append(maxWriteSize)
+                .append(" and Counter: ");
         if (trafficCounter != null) {
             builder.append(trafficCounter);
         } else {

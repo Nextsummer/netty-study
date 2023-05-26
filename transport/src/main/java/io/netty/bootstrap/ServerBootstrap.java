@@ -121,6 +121,7 @@ public class ServerBootstrap extends AbstractBootstrap<ServerBootstrap, ServerCh
 
     /**
      * Set the {@link ChannelHandler} which is used to serve the request for the {@link Channel}'s.
+     *  设置传入连接的临时存储区
      */
     public ServerBootstrap childHandler(ChannelHandler childHandler) {
         this.childHandler = ObjectUtil.checkNotNull(childHandler, "childHandler");
@@ -129,25 +130,31 @@ public class ServerBootstrap extends AbstractBootstrap<ServerBootstrap, ServerCh
 
     @Override
     void init(Channel channel) {
+        // 1. 设置Channel的一些选项
         setChannelOptions(channel, newOptionsArray(), logger);
+        // 2. 设置Channel的一些属性
         setAttributes(channel, newAttributesArray());
 
         ChannelPipeline p = channel.pipeline();
-
+        // 3. 获取当前的childGroup、childHandler、childOptions和childAttrs，并将其存储到final类型的变量中
         final EventLoopGroup currentChildGroup = childGroup;
         final ChannelHandler currentChildHandler = childHandler;
         final Entry<ChannelOption<?>, Object>[] currentChildOptions = newOptionsArray(childOptions);
         final Entry<AttributeKey<?>, Object>[] currentChildAttrs = newAttributesArray(childAttrs);
 
+        // 4. 获取新建的Channel的ChannelPipeline对象，并添加ServerBootstrapAcceptor Handler，添加完后自己就移除了
+        //  ServerBootstrapAcceptor handler： 负责接收客户端连接创建连接后，对连接的初始化工作
         p.addLast(new ChannelInitializer<Channel>() {
             @Override
             public void initChannel(final Channel ch) {
                 final ChannelPipeline pipeline = ch.pipeline();
+                // 5. 如果ChannelHandler不为空，则将其添加到ChannelPipeline中
                 ChannelHandler handler = config.handler();
                 if (handler != null) {
                     pipeline.addLast(handler);
                 }
 
+                // 6. 将ServerBootstrapAcceptor Handler添加到ChannelPipeline中
                 ch.eventLoop().execute(new Runnable() {
                     @Override
                     public void run() {
@@ -172,6 +179,14 @@ public class ServerBootstrap extends AbstractBootstrap<ServerBootstrap, ServerCh
         return this;
     }
 
+    /**
+     * ServerBootstrapAcceptor Handler是一个Netty中的处理器，它用于处理来自客户端的连接请求。
+     *
+     *  当使用Netty构建服务器时，可以通过ServerBootstrapAcceptor Handler来接受来自客户端的连接请求。
+     *  当客户端连接到服务器时，ServerBootstrapAcceptor Handler将处理该请求，并将其传递给下一个处理器，以便进行后续的处理，如协议解析、消息编解码、业务逻辑处理等。
+     *
+     *  作用在于接受客户端的连接请求，并将其转交给后续的处理器，从而实现了高并发、高吞吐量的网络通信。
+     */
     private static class ServerBootstrapAcceptor extends ChannelInboundHandlerAdapter {
 
         private final EventLoopGroup childGroup;
@@ -212,6 +227,8 @@ public class ServerBootstrap extends AbstractBootstrap<ServerBootstrap, ServerCh
             setAttributes(child, childAttrs);
 
             try {
+                // 调用子事件循环组childGroup的register方法，将新连接通道child注册到子事件循环器中，
+                // 并通过注册事件的监听器添加一个回调函数。如果注册失败，则会调用forceClose方法强制关闭该通道。
                 childGroup.register(child).addListener(new ChannelFutureListener() {
                     @Override
                     public void operationComplete(ChannelFuture future) throws Exception {

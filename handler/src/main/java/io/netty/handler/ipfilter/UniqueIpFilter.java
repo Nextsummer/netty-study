@@ -38,9 +38,11 @@ public class UniqueIpFilter extends AbstractRemoteAddressFilter<InetSocketAddres
     @Override
     protected boolean accept(ChannelHandlerContext ctx, InetSocketAddress remoteAddress) throws Exception {
         final InetAddress remoteIp = remoteAddress.getAddress();
+        // 判断这个ip有没有在连接了
         if (!connected.add(remoteIp)) {
             return false;
         } else {
+            // 连接关闭时，从connected中移除remote ip
             ctx.channel().closeFuture().addListener(new ChannelFutureListener() {
                 @Override
                 public void operationComplete(ChannelFuture future) throws Exception {

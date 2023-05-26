@@ -116,6 +116,7 @@ public final class SocketUtils {
             return AccessController.doPrivileged(new PrivilegedExceptionAction<SocketChannel>() {
                 @Override
                 public SocketChannel run() throws IOException {
+                    // 非阻塞模式下，没有连接请求时，返回null
                     return serverSocketChannel.accept();
                 }
             });
@@ -186,11 +187,11 @@ public final class SocketUtils {
     public static Enumeration<InetAddress> addressesFromNetworkInterface(final NetworkInterface intf) {
         Enumeration<InetAddress> addresses =
                 AccessController.doPrivileged(new PrivilegedAction<Enumeration<InetAddress>>() {
-            @Override
-            public Enumeration<InetAddress> run() {
-                return intf.getInetAddresses();
-            }
-        });
+                    @Override
+                    public Enumeration<InetAddress> run() {
+                        return intf.getInetAddresses();
+                    }
+                });
         // Android seems to sometimes return null even if this is not a valid return value by the api docs.
         // Just return an empty Enumeration in this case.
         // See https://github.com/netty/netty/issues/10045

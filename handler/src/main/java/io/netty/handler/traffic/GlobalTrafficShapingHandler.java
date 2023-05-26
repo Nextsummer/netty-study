@@ -134,7 +134,7 @@ public class GlobalTrafficShapingHandler extends AbstractTrafficShapingHandler {
      *            The maximum delay to wait in case of traffic excess.
      */
     public GlobalTrafficShapingHandler(ScheduledExecutorService executor, long writeLimit, long readLimit,
-            long checkInterval, long maxTime) {
+                                       long checkInterval, long maxTime) {
         super(writeLimit, readLimit, checkInterval, maxTime);
         createGlobalTrafficCounter(executor);
     }
@@ -154,7 +154,7 @@ public class GlobalTrafficShapingHandler extends AbstractTrafficShapingHandler {
      *            channels or 0 if no stats are to be computed.
      */
     public GlobalTrafficShapingHandler(ScheduledExecutorService executor, long writeLimit,
-            long readLimit, long checkInterval) {
+                                       long readLimit, long checkInterval) {
         super(writeLimit, readLimit, checkInterval);
         createGlobalTrafficCounter(executor);
     }
@@ -171,7 +171,7 @@ public class GlobalTrafficShapingHandler extends AbstractTrafficShapingHandler {
      *          0 or a limit in bytes/s
      */
     public GlobalTrafficShapingHandler(ScheduledExecutorService executor, long writeLimit,
-            long readLimit) {
+                                       long readLimit) {
         super(writeLimit, readLimit);
         createGlobalTrafficCounter(executor);
     }
@@ -329,8 +329,9 @@ public class GlobalTrafficShapingHandler extends AbstractTrafficShapingHandler {
 
     @Override
     void submitWrite(final ChannelHandlerContext ctx, final Object msg,
-            final long size, final long writedelay, final long now,
-            final ChannelPromise promise) {
+                     final long size, final long writedelay, final long now,
+                     final ChannelPromise promise) {
+        // 1.根据channel的key，获取对应的存delay数据的queue，没有则创建
         Channel channel = ctx.channel();
         Integer key = channel.hashCode();
         PerChannel perChannel = channelQueues.get(key);
@@ -344,20 +345,33 @@ public class GlobalTrafficShapingHandler extends AbstractTrafficShapingHandler {
         boolean globalSizeExceeded = false;
         // write operations need synchronization
         synchronized (perChannel) {
+            // 2. 判断是否要delay，如果不需要且queue中无数据，直接发
+
+            // 如果queue有数据，即使不需要delay，也要将数据入queue，因为需要保持顺序
             if (writedelay == 0 && perChannel.messagesQueue.isEmpty()) {
                 trafficCounter.bytesRealWriteFlowControl(size);
                 ctx.write(msg, promise);
                 perChannel.lastWriteTimestamp = now;
                 return;
             }
+
+            // 3. 预计delay时间过长，则最多等待15s（maxTime值）
             if (delay > maxTime && now + delay - perChannel.lastWriteTimestamp > maxTime) {
                 delay = maxTime;
             }
+
+            // 4. 数据进入queue
             newToSend = new ToSend(delay + now, msg, size, promise);
+            //不管什么情况，都直接入queue，所以可能会OOM，所有后面要根据queue的情况，改变可写标记位
             perChannel.messagesQueue.addLast(newToSend);
             perChannel.queueSize += size;
+            // 上下2个queueSize不一样，上面少个s，代表channel上的queue，下面是global的
             queuesSize.addAndGet(size);
+
+            // 5. 判断是否queue的数据太多，如果是，设置写状态位不可写
+            // 判断channel的queue size是否超标，或者需要停的时间过长，设置 writable 为false，提醒让上面的handler不要写了
             checkWriteSuspend(ctx, delay, perChannel.queueSize);
+            // 判断global的queues（所有的queue加一起结果）size超标
             if (queuesSize.get() > maxGlobalWriteSize) {
                 globalSizeExceeded = true;
             }
@@ -365,6 +379,8 @@ public class GlobalTrafficShapingHandler extends AbstractTrafficShapingHandler {
         if (globalSizeExceeded) {
             setUserDefinedWritability(ctx, false);
         }
+
+        // 6. 开始schedule 一个task来等待delay的时间再来发
         final long futureNow = newToSend.relativeTimeAction;
         final PerChannel forSchedule = perChannel;
         ctx.executor().schedule(new Runnable() {

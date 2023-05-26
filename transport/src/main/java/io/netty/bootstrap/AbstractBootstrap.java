@@ -268,6 +268,13 @@ public abstract class AbstractBootstrap<B extends AbstractBootstrap<B, C>, C ext
         return doBind(ObjectUtil.checkNotNull(localAddress, "localAddress"));
     }
 
+    /**
+     *  首先调用initAndRegister()方法创建并初始化Channel，并将其注册到EventLoop上，返回一个ChannelFuture对象表示注册的结果。
+     *  如果注册成功，判断注册是否完成。如果注册已完成，创建一个ChannelPromise对象，并调用doBind0()方法绑定端口；
+     *  如果注册未完成，创建一个PendingRegistrationPromise对象，并添加ChannelFutureListener监听器，在注册完成后执行绑定操作。
+     * @param localAddress
+     * @return
+     */
     private ChannelFuture doBind(final SocketAddress localAddress) {
         final ChannelFuture regFuture = initAndRegister();
         final Channel channel = regFuture.channel();
@@ -277,12 +284,15 @@ public abstract class AbstractBootstrap<B extends AbstractBootstrap<B, C>, C ext
 
         if (regFuture.isDone()) {
             // At this point we know that the registration was complete and successful.
+            // 如果注册已完成，创建一个ChannelPromise对象，并调用doBind0()方法绑定端口
             ChannelPromise promise = channel.newPromise();
             doBind0(regFuture, channel, localAddress, promise);
             return promise;
         } else {
             // Registration future is almost always fulfilled already, but just in case it's not.
+            // 如果注册未完成，创建一个PendingRegistrationPromise对象
             final PendingRegistrationPromise promise = new PendingRegistrationPromise(channel);
+            // 添加ChannelFutureListener监听器，在注册完成后执行绑定操作
             regFuture.addListener(new ChannelFutureListener() {
                 @Override
                 public void operationComplete(ChannelFuture future) throws Exception {
@@ -290,10 +300,12 @@ public abstract class AbstractBootstrap<B extends AbstractBootstrap<B, C>, C ext
                     if (cause != null) {
                         // Registration on the EventLoop failed so fail the ChannelPromise directly to not cause an
                         // IllegalStateException once we try to access the EventLoop of the Channel.
+                        // 如果注册失败，设置promise对象的异常信息
                         promise.setFailure(cause);
                     } else {
                         // Registration was successful, so set the correct executor to use.
                         // See https://github.com/netty/netty/issues/2586
+                        // 如果注册成功，先调用registered()方法设置正确的executor，再调用doBind0()方法绑定端口
                         promise.registered();
 
                         doBind0(regFuture, channel, localAddress, promise);
@@ -304,14 +316,22 @@ public abstract class AbstractBootstrap<B extends AbstractBootstrap<B, C>, C ext
         }
     }
 
+    /**
+     *  首先创建新的Channel并初始化它。如果创建失败，强制关闭Channel并返回一个异常的ChannelPromise对象。
+     *  接着将Channel注册到EventLoop上，并返回一个ChannelFuture对象表示注册的结果。
+     *  如果注册失败，关闭Channel。如果注册成功但未完成，则只需等待注册完成，后续的操作会在添加的ChannelFutureListener监听器中执行。
+     * @return
+     */
     final ChannelFuture initAndRegister() {
         Channel channel = null;
         try {
+            // 泛型+反射+工厂 创建新的Channel
             channel = channelFactory.newChannel();
             init(channel);
         } catch (Throwable t) {
             if (channel != null) {
                 // channel can be null if newChannel crashed (eg SocketException("too many open files"))
+                // 如果创建Channel失败，强制关闭Channel，并返回一个异常的ChannelPromise对象
                 channel.unsafe().closeForcibly();
                 // as the Channel is not registered yet we need to force the usage of the GlobalEventExecutor
                 return new DefaultChannelPromise(channel, GlobalEventExecutor.INSTANCE).setFailure(t);
@@ -320,7 +340,9 @@ public abstract class AbstractBootstrap<B extends AbstractBootstrap<B, C>, C ext
             return new DefaultChannelPromise(new FailedChannel(), GlobalEventExecutor.INSTANCE).setFailure(t);
         }
 
+        // 将Channel注册到EventLoop上，并返回一个ChannelFuture对象
         ChannelFuture regFuture = config().group().register(channel);
+        // 如果注册失败，关闭Channel
         if (regFuture.cause() != null) {
             if (channel.isRegistered()) {
                 channel.close();
@@ -343,6 +365,18 @@ public abstract class AbstractBootstrap<B extends AbstractBootstrap<B, C>, C ext
 
     abstract void init(Channel channel) throws Exception;
 
+    /**
+     *  doBind0()方法是用来执行绑定端口的具体操作的，它需要传入ChannelFuture对象（表示注册结果）、Channel对象、本地地址、以及ChannelPromise对象（表示绑定结果）。
+     *  在方法中，首先获取Channel所在的EventLoop，并使用execute()方法将绑定操作提交到EventLoop的任务队列中，实现异步执行。
+     *  接着判断注册是否成功，
+     *      如果成功，则调用Java NIO的ServerSocketChannel的bind()方法绑定端口，并将ChannelPromise对象添加一个监听器，使得在绑定失败时自动关闭Channel。
+     *      如果注册失败，则直接设置promise对象的异常信息。
+     *  综上所述，doBind0()方法是实现绑定端口的关键步骤之一，它通过调用Java NIO的API实现了端口绑定的操作。由于是异步执行，可以避免网络阻塞，提高了网络通信的效率。
+     * @param regFuture
+     * @param channel
+     * @param localAddress
+     * @param promise
+     */
     private static void doBind0(
             final ChannelFuture regFuture, final Channel channel,
             final SocketAddress localAddress, final ChannelPromise promise) {
@@ -353,8 +387,10 @@ public abstract class AbstractBootstrap<B extends AbstractBootstrap<B, C>, C ext
             @Override
             public void run() {
                 if (regFuture.isSuccess()) {
+                    // 如果注册成功，调用Java NIO的ServerSocketChannel的bind()方法绑定端口
                     channel.bind(localAddress, promise).addListener(ChannelFutureListener.CLOSE_ON_FAILURE);
                 } else {
+                    // 如果注册失败，设置promise对象的异常信息
                     promise.setFailure(regFuture.cause());
                 }
             }
@@ -472,8 +508,8 @@ public abstract class AbstractBootstrap<B extends AbstractBootstrap<B, C>, C ext
     @Override
     public String toString() {
         StringBuilder buf = new StringBuilder()
-            .append(StringUtil.simpleClassName(this))
-            .append('(').append(config()).append(')');
+                .append(StringUtil.simpleClassName(this))
+                .append('(').append(config()).append(')');
         return buf.toString();
     }
 
